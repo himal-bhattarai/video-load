@@ -183,7 +183,8 @@ app.post("/api/info", async (req, res) => {
       qualities,
     });
   } catch (err) {
-    console.error("[/api/info]", err.message);
+    console.error("[/api/info] URL:", url);
+    console.error("[/api/info] Error:", err.message);
     res.status(500).json({ error: "Failed to fetch video info.", detail: err.message });
   }
 });
