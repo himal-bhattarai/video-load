@@ -51,6 +51,7 @@ function ytDlp(args) {
     let stdout = "", stderr = "";
     proc.stdout.on("data", (d) => (stdout += d));
     proc.stderr.on("data", (d) => (stderr += d));
+    proc.on("error", (err) => reject(new Error(`yt-dlp spawn failed: ${err.message}`)));
     proc.on("close", (code) => {
       if (code === 0) resolve(stdout.trim());
       else reject(new Error(stderr.trim() || `yt-dlp exited with code ${code}`));
@@ -199,6 +200,17 @@ app.post("/api/start", (req, res) => {
 
   const proc = spawn(YTDLP, args);
   job.proc = proc;
+
+  // Handle spawn errors (e.g. yt-dlp binary not found)
+  proc.on("error", (err) => {
+    job.status = "error";
+    job.error  = `yt-dlp could not start: ${err.message}`;
+    console.error(`[${jobId}] spawn error:`, err.message);
+    broadcastJob(jobId, { error: job.error });
+    scheduleCleanup(jobId);
+    for (const client of job.sseClients) { try { client.end(); } catch {} }
+    job.sseClients = [];
+  });
 
   // Parse progress from yt-dlp stderr
   // Line format: "[download]  45.2% of 128.30MiB at 2.50MiB/s ETA 00:30"
@@ -362,8 +374,24 @@ process.on("SIGTERM", shutdown);
 app.listen(PORT, () => {
   console.log(`✅  Video Downloader API → http://localhost:${PORT}`);
   console.log(`   Temp dir: ${TEMP_DIR}`);
-  exec(`${YTDLP} --version`, (err, stdout) => {
-    if (err) console.warn("⚠️  yt-dlp not found. Run: winget install yt-dlp");
-    else console.log(`   yt-dlp version: ${stdout.trim()}`);
+  console.log(`   YTDLP_PATH env: ${process.env.YTDLP_PATH || "(not set)"}`);
+  console.log(`   Resolved YTDLP: ${YTDLP}`);
+
+  // Check if file exists at resolved path
+  if (process.env.YTDLP_PATH) {
+    const exists = fs.existsSync(YTDLP);
+    console.log(`   Binary exists at path: ${exists}`);
+  }
+
+  // Use spawn instead of exec to correctly handle paths with spaces or special chars
+  const check = spawn(YTDLP, ["--version"]);
+  let version = "";
+  check.stdout.on("data", (d) => (version += d));
+  check.on("close", (code) => {
+    if (code === 0) console.log(`   yt-dlp version: ${version.trim()} ✅`);
+    else console.warn(`⚠️  yt-dlp not found. Run: winget install yt-dlp`);
+  });
+  check.on("error", (err) => {
+    console.warn(`⚠️  yt-dlp spawn error: ${err.message}`);
   });
 });
