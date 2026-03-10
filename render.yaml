@@ -6,4 +6,6 @@ services:
     startCommand: node server.js
     envVars:
       - key: PORT
-        value: 3000
+        value: 10000
+      - key: YTDLP_PATH
+        value: /usr/local/bin/yt-dlp

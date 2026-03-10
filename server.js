@@ -11,6 +11,11 @@ const { v4: uuidv4 } = require("uuid");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ─── yt-dlp binary path ───────────────────────────────────────────────────────
+// On Render (Linux), pip installs to /usr/local/bin/yt-dlp
+// Locally on Windows, it's just "yt-dlp" from PATH
+const YTDLP = process.env.YTDLP_PATH || "yt-dlp";
+
 // ─── Temp dir ─────────────────────────────────────────────────────────────────
 const TEMP_DIR = path.join(os.tmpdir(), "video-downloader");
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
@@ -38,7 +43,7 @@ function isValidUrl(url) {
 
 function ytDlp(args) {
   return new Promise((resolve, reject) => {
-    const proc = spawn("yt-dlp", args);
+    const proc = spawn(YTDLP, args);
     let stdout = "", stderr = "";
     proc.stdout.on("data", (d) => (stdout += d));
     proc.stderr.on("data", (d) => (stderr += d));
@@ -188,7 +193,7 @@ app.post("/api/start", (req, res) => {
 
   console.log(`[${jobId}] Starting: "${safeTitle}"`);
 
-  const proc = spawn("yt-dlp", args);
+  const proc = spawn(YTDLP, args);
   job.proc = proc;
 
   // Parse progress from yt-dlp stderr
@@ -353,7 +358,7 @@ process.on("SIGTERM", shutdown);
 app.listen(PORT, () => {
   console.log(`✅  Video Downloader API → http://localhost:${PORT}`);
   console.log(`   Temp dir: ${TEMP_DIR}`);
-  exec("yt-dlp --version", (err, stdout) => {
+  exec(`${YTDLP} --version`, (err, stdout) => {
     if (err) console.warn("⚠️  yt-dlp not found. Run: winget install yt-dlp");
     else console.log(`   yt-dlp version: ${stdout.trim()}`);
   });
