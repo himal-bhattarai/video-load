@@ -52,6 +52,19 @@ function isValidUrl(url) {
   } catch { return false; }
 }
 
+/** Normalize short URLs like youtu.be/ID?si=... → full youtube.com URL */
+function normalizeUrl(url) {
+  try {
+    const u = new URL(url);
+    // youtu.be/VIDEO_ID → youtube.com/watch?v=VIDEO_ID
+    if (u.hostname === "youtu.be") {
+      const videoId = u.pathname.slice(1);
+      return `https://www.youtube.com/watch?v=${videoId}`;
+    }
+    return url;
+  } catch { return url; }
+}
+
 function ytDlp(args) {
   return new Promise((resolve, reject) => {
     const proc = spawn(YTDLP, args);
@@ -117,6 +130,8 @@ app.post("/api/info", async (req, res) => {
   if (!url || !isValidUrl(url))
     return res.status(400).json({ error: "A valid http/https URL is required." });
 
+  url = normalizeUrl(url);
+
   try {
     const raw = await ytDlp(["--dump-json", "--no-playlist", "--no-warnings", url]);
     const info = JSON.parse(raw);
@@ -173,7 +188,7 @@ app.post("/api/start", (req, res) => {
   if (!url || !isValidUrl(url))
     return res.status(400).json({ error: "A valid http/https URL is required." });
 
-  const isAudio = audioOnly === true || audioOnly === "true";
+  url = normalizeUrl(url);
   const jobId = uuidv4();
   const ext = isAudio ? "mp3" : "mp4";
   const safeTitle = title ? sanitizeFilename(title) : jobId;
@@ -219,21 +234,25 @@ app.post("/api/start", (req, res) => {
     job.sseClients = [];
   });
 
-  // Parse progress from yt-dlp stderr
-  // Line format: "[download]  45.2% of 128.30MiB at 2.50MiB/s ETA 00:30"
-  proc.stderr.on("data", (data) => {
+  // Parse progress lines from both stdout AND stderr
+  // yt-dlp sends progress to stderr locally but stdout on some Linux envs
+  const progressRegex = /(\d+\.?\d*)%\s+of\s+[\d.]+\S+\s+at\s+([\d.]+\S+\/s)(?:\s+ETA\s+(\S+))?/;
+
+  function parseProgress(data) {
     const lines = data.toString().split("\n");
     for (const line of lines) {
-      const m = line.match(/(\d+\.?\d*)%\s+of\s+[\d.]+\S+\s+at\s+([\d.]+\S+\/s)(?:\s+ETA\s+(\S+))?/);
+      const m = line.match(progressRegex);
       if (m) {
         job.percent = parseFloat(m[1]);
         job.speed   = m[2] || "";
         job.eta     = m[3] || "";
-        // Push to all SSE clients
         broadcastJob(jobId, { percent: job.percent, speed: job.speed, eta: job.eta });
       }
     }
-  });
+  }
+
+  proc.stdout.on("data", parseProgress);
+  proc.stderr.on("data", parseProgress);
 
   proc.on("close", (code) => {
     if (code === 0) {
