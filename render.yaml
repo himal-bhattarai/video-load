@@ -4,11 +4,13 @@ services:
     runtime: node
     buildCommand: |
       npm install &&
-      curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp &&
-      chmod a+rx /usr/local/bin/yt-dlp
+      curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ./yt-dlp &&
+      chmod a+rx ./yt-dlp &&
+      echo "yt-dlp installed at:" && ls -la ./yt-dlp &&
+      ./yt-dlp --version
     startCommand: node server.js
     envVars:
       - key: PORT
         value: 10000
       - key: YTDLP_PATH
-        value: /usr/local/bin/yt-dlp
+        value: ./yt-dlp

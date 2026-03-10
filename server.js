@@ -13,9 +13,12 @@ const PORT = process.env.PORT || 3000;
 app.set("trust proxy", 1); // Required for Render/proxied deployments (fixes rate-limit error)
 
 // ─── yt-dlp binary path ───────────────────────────────────────────────────────
-// On Render (Linux), pip installs to /usr/local/bin/yt-dlp
-// Locally on Windows, it's just "yt-dlp" from PATH
-const YTDLP = process.env.YTDLP_PATH || "yt-dlp";
+// On Render: binary downloaded to project root, resolved to absolute path
+// Locally on Windows: just "yt-dlp" from PATH
+const YTDLP = process.env.YTDLP_PATH
+  ? path.resolve(process.env.YTDLP_PATH)
+  : "yt-dlp";
+console.log(`   yt-dlp path: ${YTDLP}`);
 
 // ─── Temp dir ─────────────────────────────────────────────────────────────────
 const TEMP_DIR = path.join(os.tmpdir(), "video-downloader");
