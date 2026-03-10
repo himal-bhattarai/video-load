@@ -52,17 +52,31 @@ function isValidUrl(url) {
   } catch { return false; }
 }
 
-/** Normalize short URLs like youtu.be/ID?si=... → full youtube.com URL */
-function normalizeUrl(url) {
+/** Normalize and clean YouTube URLs — strips tracking params, handles all formats */
+function normalizeUrl(raw) {
   try {
-    const u = new URL(url);
-    // youtu.be/VIDEO_ID → youtube.com/watch?v=VIDEO_ID
+    const u = new URL(raw);
+
+    // youtu.be/VIDEO_ID?si=... → clean youtube.com watch URL
     if (u.hostname === "youtu.be") {
-      const videoId = u.pathname.slice(1);
+      const videoId = u.pathname.slice(1).split("/")[0];
       return `https://www.youtube.com/watch?v=${videoId}`;
     }
-    return url;
-  } catch { return url; }
+
+    // youtube.com/watch?v=ID&si=...&pp=... → strip tracking params
+    if (u.hostname === "www.youtube.com" || u.hostname === "youtube.com") {
+      const videoId = u.searchParams.get("v");
+      if (videoId) return `https://www.youtube.com/watch?v=${videoId}`;
+
+      // youtube.com/shorts/VIDEO_ID
+      if (u.pathname.startsWith("/shorts/")) {
+        const shortId = u.pathname.split("/shorts/")[1].split("/")[0];
+        return `https://www.youtube.com/watch?v=${shortId}`;
+      }
+    }
+
+    return raw;
+  } catch { return raw; }
 }
 
 function ytDlp(args) {
