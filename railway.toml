@@ -5,3 +5,6 @@ buildCommand = "npm install && curl -L https://github.com/yt-dlp/yt-dlp/releases
 [deploy]
 startCommand = "node server.js"
 restartPolicyType = "on_failure"
+
+[nixpacks]
+aptPkgs = ["python3", "ffmpeg"]
