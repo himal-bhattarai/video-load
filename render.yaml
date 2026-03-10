@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: video-downloader
+    runtime: node
+    buildCommand: npm install && pip install yt-dlp
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: 3000
