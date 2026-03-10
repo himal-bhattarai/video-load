@@ -2,7 +2,10 @@ services:
   - type: web
     name: video-downloader
     runtime: node
-    buildCommand: npm install && pip install yt-dlp
+    buildCommand: |
+      npm install &&
+      curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp &&
+      chmod a+rx /usr/local/bin/yt-dlp
     startCommand: node server.js
     envVars:
       - key: PORT

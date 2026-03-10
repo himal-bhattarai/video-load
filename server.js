@@ -10,6 +10,7 @@ const { v4: uuidv4 } = require("uuid");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+app.set("trust proxy", 1); // Required for Render/proxied deployments (fixes rate-limit error)
 
 // ─── yt-dlp binary path ───────────────────────────────────────────────────────
 // On Render (Linux), pip installs to /usr/local/bin/yt-dlp
