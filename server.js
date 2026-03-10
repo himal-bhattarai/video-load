@@ -15,12 +15,12 @@ app.set("trust proxy", 1); // Required for Render/proxied deployments (fixes rat
 // ─── yt-dlp binary path ───────────────────────────────────────────────────────
 // Search common install locations in order
 const YTDLP_CANDIDATES = [
-  process.env.YTDLP_PATH,          // explicit override
-  "/usr/local/bin/yt-dlp",         // pip install (Linux)
-  "/usr/bin/yt-dlp",               // apt install (Linux)
-  "/home/render/.local/bin/yt-dlp",// pip --user (Render)
-  "/opt/render/project/src/yt-dlp",// curl to project dir
-  "yt-dlp",                        // PATH fallback (Windows local)
+  process.env.YTDLP_PATH,           // explicit override
+  "/usr/local/bin/yt-dlp",          // Railway / curl install (Linux)
+  "/usr/bin/yt-dlp",                // apt install (Linux)
+  "/home/render/.local/bin/yt-dlp", // Render pip --user
+  "/opt/render/project/src/yt-dlp", // Render project dir
+  "yt-dlp",                         // Windows local PATH
 ].filter(Boolean);
 
 const YTDLP = YTDLP_CANDIDATES.find((p) => {
@@ -30,6 +30,18 @@ const YTDLP = YTDLP_CANDIDATES.find((p) => {
 // ─── Temp dir ─────────────────────────────────────────────────────────────────
 const TEMP_DIR = path.join(os.tmpdir(), "video-downloader");
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+
+// ─── Write cookies file from env var if present ───────────────────────────────
+const COOKIES_PATH = path.join(os.tmpdir(), "yt-cookies.txt");
+if (process.env.YOUTUBE_COOKIES_BASE64) {
+  try {
+    const decoded = Buffer.from(process.env.YOUTUBE_COOKIES_BASE64, "base64").toString("utf8");
+    fs.writeFileSync(COOKIES_PATH, decoded);
+    console.log("   🍪 YouTube cookies loaded from env");
+  } catch (e) {
+    console.warn("   ⚠️  Failed to write cookies:", e.message);
+  }
+}
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -121,6 +133,11 @@ function scheduleCleanup(jobId) {
   }, 10 * 60 * 1000);
 }
 
+// ─── Build flag arrays (cookies added dynamically if available) ───────────────
+function getCookieFlags() {
+  return fs.existsSync(COOKIES_PATH) ? ["--cookies", COOKIES_PATH] : [];
+}
+
 // ─── Speed flags ──────────────────────────────────────────────────────────────
 const SPEED_FLAGS = [
   "--concurrent-fragments", "4",
@@ -128,7 +145,18 @@ const SPEED_FLAGS = [
   "--no-part",
   "--no-warnings",
   "--no-playlist",
-  "--newline",   // ← makes progress output line-by-line for parsing
+  "--newline",
+  "--extractor-args", "youtube:player_client=web,mweb,ios",
+  "--user-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+];
+
+// Info fetch flags
+const INFO_FLAGS = [
+  "--dump-json",
+  "--no-playlist",
+  "--no-warnings",
+  "--extractor-args", "youtube:player_client=web,mweb,ios",
+  "--user-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
 ];
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -147,7 +175,7 @@ app.post("/api/info", async (req, res) => {
   url = normalizeUrl(url);
 
   try {
-    const raw = await ytDlp(["--dump-json", "--no-playlist", "--no-warnings", url]);
+    const raw = await ytDlp([...INFO_FLAGS, ...getCookieFlags(), url]);
     const info = JSON.parse(raw);
 
     const seenHeights = new Set();
@@ -210,7 +238,7 @@ app.post("/api/start", (req, res) => {
   const safeTitle = title ? sanitizeFilename(title) : jobId;
   const outputPath = path.join(TEMP_DIR, `${jobId}.${ext}`);
 
-  const args = [...SPEED_FLAGS, "-o", outputPath];
+  const args = [...SPEED_FLAGS, ...getCookieFlags(), "-o", outputPath];
 
   if (isAudio) {
     args.push("-x", "--audio-format", "mp3", "--audio-quality", "0");
