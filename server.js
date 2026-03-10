@@ -126,7 +126,7 @@ app.get("/api/health", (req, res) => {
 
 // POST /api/info — fetch video metadata + quality list
 app.post("/api/info", async (req, res) => {
-  const { url } = req.body;
+  let { url } = req.body;
   if (!url || !isValidUrl(url))
     return res.status(400).json({ error: "A valid http/https URL is required." });
 
@@ -183,12 +183,13 @@ app.post("/api/info", async (req, res) => {
  * and fetches /api/file/:jobId once done. Browser never hangs.
  */
 app.post("/api/start", (req, res) => {
-  const { url, formatId, audioOnly, title } = req.body;
+  let { url, formatId, audioOnly, title } = req.body;
 
   if (!url || !isValidUrl(url))
     return res.status(400).json({ error: "A valid http/https URL is required." });
 
   url = normalizeUrl(url);
+  const isAudio = audioOnly === true || audioOnly === "true";
   const jobId = uuidv4();
   const ext = isAudio ? "mp3" : "mp4";
   const safeTitle = title ? sanitizeFilename(title) : jobId;
