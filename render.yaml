@@ -2,15 +2,12 @@ services:
   - type: web
     name: video-downloader
     runtime: node
-    buildCommand: |
+    buildCommand: >-
       npm install &&
-      curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ./yt-dlp &&
-      chmod a+rx ./yt-dlp &&
-      echo "yt-dlp installed at:" && ls -la ./yt-dlp &&
-      ./yt-dlp --version
+      pip3 install yt-dlp &&
+      which yt-dlp &&
+      yt-dlp --version
     startCommand: node server.js
     envVars:
       - key: PORT
         value: 10000
-      - key: YTDLP_PATH
-        value: ./yt-dlp

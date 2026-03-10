@@ -13,12 +13,19 @@ const PORT = process.env.PORT || 3000;
 app.set("trust proxy", 1); // Required for Render/proxied deployments (fixes rate-limit error)
 
 // ─── yt-dlp binary path ───────────────────────────────────────────────────────
-// On Render: binary downloaded to project root, resolved to absolute path
-// Locally on Windows: just "yt-dlp" from PATH
-const YTDLP = process.env.YTDLP_PATH
-  ? path.resolve(process.env.YTDLP_PATH)
-  : "yt-dlp";
-console.log(`   yt-dlp path: ${YTDLP}`);
+// Search common install locations in order
+const YTDLP_CANDIDATES = [
+  process.env.YTDLP_PATH,          // explicit override
+  "/usr/local/bin/yt-dlp",         // pip install (Linux)
+  "/usr/bin/yt-dlp",               // apt install (Linux)
+  "/home/render/.local/bin/yt-dlp",// pip --user (Render)
+  "/opt/render/project/src/yt-dlp",// curl to project dir
+  "yt-dlp",                        // PATH fallback (Windows local)
+].filter(Boolean);
+
+const YTDLP = YTDLP_CANDIDATES.find((p) => {
+  try { return p === "yt-dlp" || fs.existsSync(p); } catch { return false; }
+}) || "yt-dlp";
 
 // ─── Temp dir ─────────────────────────────────────────────────────────────────
 const TEMP_DIR = path.join(os.tmpdir(), "video-downloader");
@@ -374,24 +381,21 @@ process.on("SIGTERM", shutdown);
 app.listen(PORT, () => {
   console.log(`✅  Video Downloader API → http://localhost:${PORT}`);
   console.log(`   Temp dir: ${TEMP_DIR}`);
-  console.log(`   YTDLP_PATH env: ${process.env.YTDLP_PATH || "(not set)"}`);
   console.log(`   Resolved YTDLP: ${YTDLP}`);
 
   // Check if file exists at resolved path
-  if (process.env.YTDLP_PATH) {
-    const exists = fs.existsSync(YTDLP);
-    console.log(`   Binary exists at path: ${exists}`);
-  }
+  const exists = YTDLP !== "yt-dlp" ? fs.existsSync(YTDLP) : "unknown (PATH)";
+  console.log(`   Binary exists: ${exists}`);
 
-  // Use spawn instead of exec to correctly handle paths with spaces or special chars
   const check = spawn(YTDLP, ["--version"]);
   let version = "";
   check.stdout.on("data", (d) => (version += d));
   check.on("close", (code) => {
     if (code === 0) console.log(`   yt-dlp version: ${version.trim()} ✅`);
-    else console.warn(`⚠️  yt-dlp not found. Run: winget install yt-dlp`);
+    else console.warn(`⚠️  yt-dlp not working at: ${YTDLP}`);
   });
   check.on("error", (err) => {
     console.warn(`⚠️  yt-dlp spawn error: ${err.message}`);
+    console.warn(`   Searched paths: ${YTDLP_CANDIDATES.join(", ")}`);
   });
 });
